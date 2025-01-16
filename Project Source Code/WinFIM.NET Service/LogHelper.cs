@@ -46,13 +46,13 @@ namespace WinFIM.NET_Service
 
         internal static void ConfigureLogging()
         {
-            string logFilePath = ConfigurationManager.AppSettings["serilog:write-to:File.path"];
+            var logFilePath = ConfigurationManager.AppSettings["serilog:write-to:File.path"];
             if (!(string.IsNullOrEmpty(logFilePath)))
             {
 
                 //if the configured log file path has a filename but not directory, set the directory to the same directory as this WinFIM.NET binary file
-                string[] directoryDelimeters = { "/", "\\" };
-                if (!(directoryDelimeters.Any(logFilePath.Contains)))
+                string[] directoryDelimiters = { "/", "\\" };
+                if (!(directoryDelimiters.Any(logFilePath.Contains)))
                 {
                     logFilePath = Path.Combine(LogHelper.WorkDir, logFilePath);
                     AddOrUpdateAppSettings("serilog:write-to:File.path", logFilePath);
@@ -80,25 +80,32 @@ namespace WinFIM.NET_Service
 
         internal static void WriteEventLog(string message, EventLogEntryType eventType, int eventId)
         {
-            if (Properties.Settings.Default.is_log_to_windows_eventlog)
+            try
             {
-                EventLog1.Source = "WinFIM.NET";
-                EventLog1.Log = "WinFIM.NET";
-                message = message.Truncate(32768); // Windows Event log strings are limited to a maximum of 32768 characters
-                EventLog1.WriteEntry(message, eventType, eventId);
+                if (Properties.Settings.Default.is_log_to_windows_eventlog)
+                {
+                    EventLog1.Source = "WinFIM.NET";
+                    EventLog1.Log = "WinFIM.NET";
+                    message = message.Truncate(32766); // Windows Event log strings are limited to a maximum of 32766 characters
+                    EventLog1.WriteEntry(message, eventType, eventId);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex.Message);
             }
         }
 
         internal static string GetRemoteConnections()
         {
-            string output = "ERROR in running CMD \"query user\"";
+            var output = "ERROR in running CMD \"query user\"";
             if (!Properties.Settings.Default.is_capture_remote_connection_status)
                 return string.Empty;
             try
             {
-                using (Process process = new Process())
+                using (var process = new Process())
                 {
-                    IntPtr val = IntPtr.Zero;
+                    var val = IntPtr.Zero;
                     _ = Wow64DisableWow64FsRedirection(ref val);
                     process.StartInfo.FileName = @"cmd.exe";
                     process.StartInfo.Arguments =
@@ -121,7 +128,7 @@ namespace WinFIM.NET_Service
             }
             catch (Exception e)
             {
-                string errorMessage = $"Error in GetRemoteConnections : {e.Message}";
+                var errorMessage = $"Error in GetRemoteConnections : {e.Message}";
                 Log.Error(errorMessage);
                 return output + "\n" + e.Message;
             }
@@ -129,17 +136,17 @@ namespace WinFIM.NET_Service
 
         internal static int GetSchedule()
         {
-            string schedulerConf = LogHelper.WorkDir + "\\scheduler.txt";
-            int schedulerMin = 0;
+            var schedulerConf = LogHelper.WorkDir + "\\scheduler.txt";
+            var schedulerMin = 0;
             try
             {
-                string timerMinute = File.ReadLines(schedulerConf).First();
+                var timerMinute = File.ReadLines(schedulerConf).First();
                 timerMinute = timerMinute.Trim();
                 schedulerMin = Convert.ToInt32(timerMinute);
             }
             catch (IOException e)
             {
-                string message = $"Please check if the file '{WorkDir}\\scheduler.txt' exists or a numeric value is input into the file 'scheduler.txt'. Defaulting to a timer of 0 minutes.";
+                var message = $"Please check if the file '{WorkDir}\\scheduler.txt' exists or a numeric value is input into the file 'scheduler.txt'. Defaulting to a timer of 0 minutes.";
                 Log.Error(e, message);
             }
             return schedulerMin;
