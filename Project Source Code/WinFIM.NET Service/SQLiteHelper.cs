@@ -42,15 +42,15 @@ namespace WinFIM.NET_Service
             {
                 Log.Debug($"SQLite database file {DbFilePath} exists");
                 Connection.Open();
-                int checkedDatabaseVersion = CheckDatabaseVersion();
+                var checkedDatabaseVersion = CheckDatabaseVersion();
                 if (checkedDatabaseVersion != CurrentDatabaseVersion)
                 {
-                    string dbFileName = Path.GetFileNameWithoutExtension(DbFilePath);
-                    string dbFileExt = Path.GetExtension(DbFilePath);
-                    string dbDirName = Path.GetDirectoryName(DbFilePath);
-                    string currentFileFriendlyDateTime = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-                    string backupDbFileName = $"{dbFileName}-old-version-v{checkedDatabaseVersion}-{currentFileFriendlyDateTime}{dbFileExt}";
-                    string backupDbPath = $"{dbDirName}\\{backupDbFileName}";
+                    var dbFileName = Path.GetFileNameWithoutExtension(DbFilePath);
+                    var dbFileExt = Path.GetExtension(DbFilePath);
+                    var dbDirName = Path.GetDirectoryName(DbFilePath);
+                    var currentFileFriendlyDateTime = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                    var backupDbFileName = $"{dbFileName}-old-version-v{checkedDatabaseVersion}-{currentFileFriendlyDateTime}{dbFileExt}";
+                    var backupDbPath = $"{dbDirName}\\{backupDbFileName}";
                     Log.Information($"SQLite database {DbFilePath} is version {checkedDatabaseVersion}. Required version {CurrentDatabaseVersion}. Renaming to {backupDbPath}");
                     Connection.Close();
                     if (DbFilePath != null) File.Move(DbFilePath, backupDbPath);
@@ -70,11 +70,11 @@ namespace WinFIM.NET_Service
         private int CheckDatabaseVersion()
         {
             Log.Debug("Checking database version");
-            int checkedDatabaseVersion = 0;
+            var checkedDatabaseVersion = 0;
             try
             {
                 const string sql = "SELECT version FROM VERSION_CONTROL order by version desc limit 1";
-                object output = ExecuteScalar(sql, false) ?? 0;
+                var output = ExecuteScalar(sql, false) ?? 0;
                 checkedDatabaseVersion = Convert.ToInt32(output); // try convert to integer, or output 0
                 Log.Debug($"Database version for {DbFilePath}: {checkedDatabaseVersion}");
             }
@@ -89,7 +89,7 @@ namespace WinFIM.NET_Service
         // Ensure that all required tables exist
         {
             Log.Debug("Creating SQlite table BASELINE_PATH if it doesn't exist...");
-            string sql = @"
+            var sql = @"
                 CREATE TABLE IF NOT EXISTS BASELINE_PATH (
                     pathname    TEXT PRIMARY KEY,
                     pathexists  BOOLEAN  CHECK (pathexists IN (0, 1)) NOT NULL,
@@ -142,7 +142,7 @@ namespace WinFIM.NET_Service
         {
             try
             {
-                using (SQLiteCommand command = new SQLiteCommand(Connection))
+                using (var command = new SQLiteCommand(Connection))
                 {
                     Log.Verbose($"Running ExecuteNonQuery {sql}");
                     command.CommandText = sql;
@@ -151,7 +151,7 @@ namespace WinFIM.NET_Service
             }
             catch (Exception e)
             {
-                string errorMessage = $"Error running ExecuteNonQuery {sql}";
+                var errorMessage = $"Error running ExecuteNonQuery {sql}";
                 Log.Error(e, errorMessage);
                 throw;
             }
@@ -164,7 +164,7 @@ namespace WinFIM.NET_Service
             object output;
             try
             {
-                using (SQLiteCommand command = new SQLiteCommand(Connection))
+                using (var command = new SQLiteCommand(Connection))
                 {
                     Log.Verbose($"Running ExecuteScalar {sql}");
                     command.CommandText = sql;
@@ -175,7 +175,7 @@ namespace WinFIM.NET_Service
             {
                 if (isLogError)
                 {
-                    string errorMessage = $"Error running query {sql}";
+                    var errorMessage = $"Error running query {sql}";
                     Log.Error(e, errorMessage);
                     throw;
                 }

@@ -13,7 +13,7 @@ namespace WinFIM.NET_Service
         private static void Main()
         {
             LogHelper.ConfigureLogging();
-            string currentProcessName = Process.GetCurrentProcess().ProcessName;
+            var currentProcessName = Process.GetCurrentProcess().ProcessName;
             if (Process.GetProcessesByName(currentProcessName).Length > 1)
             {
                 Log.Error($"Application {currentProcessName} already running. Only one instance of this application is allowed. Exiting");
@@ -23,7 +23,7 @@ namespace WinFIM.NET_Service
             if (Environment.UserInteractive)
             {
                 // Startup as application
-                using (Service1 service1 = new Service1())
+                using (var service1 = new Service1())
                 {
                     Log.Debug(("Starting WinFIM.NET in console mode"));
                     service1.ConsoleScheduled();
@@ -33,7 +33,7 @@ namespace WinFIM.NET_Service
             else
             {
                 // Startup as service
-                ServiceBase[] servicesToRun = new ServiceBase[]
+                var servicesToRun = new ServiceBase[]
                 {
                     new Service1()
                 };

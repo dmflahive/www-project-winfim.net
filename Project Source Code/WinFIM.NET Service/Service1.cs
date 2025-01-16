@@ -29,9 +29,9 @@ namespace WinFIM.NET_Service
         internal void ConsoleScheduled()
         {
             _controller.Initialise();
-            int schedulerMin = LogHelper.GetSchedule();
-            string serviceStartMessage = Properties.Settings.Default.service_start_message +
-                                         $": (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
+            var schedulerMin = LogHelper.GetSchedule();
+            var serviceStartMessage = Properties.Settings.Default.service_start_message +
+                                      $": (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
             serviceStartMessage = $"{serviceStartMessage + LogHelper.GetRemoteConnections()} " +
                                   "This console started service will run every " + schedulerMin.ToString() +
                                   " minute(s).";
@@ -49,7 +49,7 @@ namespace WinFIM.NET_Service
 
         protected override void OnStart(string[] args)
         {
-            Thread myThread = new Thread(ServiceStart)
+            var myThread = new Thread(ServiceStart)
             {
                 Name = "Worker Thread",
                 IsBackground = true
@@ -62,12 +62,12 @@ namespace WinFIM.NET_Service
             // Read if there is any valid schedule timer (in minute)
             _controller.Initialise();
             string serviceStartMessage;
-            int schedulerMin = LogHelper.GetSchedule();
+            var schedulerMin = LogHelper.GetSchedule();
 
             if (schedulerMin > 0)
             // using timer mode
             {
-                System.Timers.Timer timer = new System.Timers.Timer
+                var timer = new System.Timers.Timer
                 {
                     Interval = schedulerMin * 60000 // control the service to run every pre-defined minutes
                 };
@@ -110,8 +110,8 @@ namespace WinFIM.NET_Service
 
         protected override void OnStop()
         {
-            string serviceStopMessage = Properties.Settings.Default.service_stop_message +
-                                        $": (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
+            var serviceStopMessage = Properties.Settings.Default.service_stop_message +
+                                     $": (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
             serviceStopMessage += LogHelper.GetRemoteConnections();
             Log.Information(serviceStopMessage);
             LogHelper.WriteEventLog(serviceStopMessage, EventLogEntryType.Information, 7770);

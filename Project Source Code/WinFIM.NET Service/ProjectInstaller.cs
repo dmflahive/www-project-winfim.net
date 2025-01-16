@@ -17,11 +17,11 @@ namespace WinFIM.NET_Service
         //for service to start once after install
         private void ServiceInstaller_AfterInstall(object sender, InstallEventArgs e)
         {
-            ServiceInstaller serviceInstaller = (ServiceInstaller)sender;
+            var serviceInstaller = (ServiceInstaller)sender;
 
             try
             {
-                using (ServiceController sc = new ServiceController(serviceInstaller.ServiceName))
+                using (var sc = new ServiceController(serviceInstaller.ServiceName))
                 {
                     sc.Start();
                 }
