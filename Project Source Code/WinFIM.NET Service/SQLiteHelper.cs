@@ -6,10 +6,11 @@ using System.IO;
 
 namespace WinFIM.NET_Service
 {
-    internal sealed class SQLiteHelper 
+    internal sealed class SQLiteHelper
     {
-        internal string ConnectionString { get; }
-        private string DbFilePath { get; }
+        private readonly string _connectionString;
+        private readonly string _dbFilePath;
+        
         private const int CURRENT_DATABASE_VERSION = 3;
         private const string CURRENT_DATABASE_VERSION_NOTES =
             "capitalised table names," +
@@ -23,36 +24,41 @@ namespace WinFIM.NET_Service
 
         internal SQLiteHelper()
         {
-            DbFilePath = LogHelper.WorkDir + "\\fimdb.db";
-            ConnectionString = @"URI=file:" + DbFilePath + ";PRAGMA journal_mode=WAL;";
+            _dbFilePath = LogHelper.WorkDir + "\\fimdb.db";
+            _connectionString = @"URI=file:" + _dbFilePath + ";PRAGMA journal_mode=WAL;";
         }
 
         internal void EnsureDatabaseExists()
-        // Create the database if it doesn't exist or is the wrong version
         {
-            if (File.Exists(DbFilePath))
+            if (File.Exists(_dbFilePath))
             {
-                Log.Debug($"SQLite database file {DbFilePath} exists");
+                Log.Debug($"SQLite database file {_dbFilePath} exists");
                 var checkedDatabaseVersion = CheckDatabaseVersion();
                 if (checkedDatabaseVersion != CURRENT_DATABASE_VERSION)
                 {
-                    var dbFileName = Path.GetFileNameWithoutExtension(DbFilePath);
-                    var dbFileExt = Path.GetExtension(DbFilePath);
-                    var dbDirName = Path.GetDirectoryName(DbFilePath);
+                    var dbFileName = Path.GetFileNameWithoutExtension(_dbFilePath);
+                    var dbFileExt = Path.GetExtension(_dbFilePath);
+                    var dbDirName = Path.GetDirectoryName(_dbFilePath);
                     var currentFileFriendlyDateTime = DateTime.Now.ToString("yyyyMMdd-HHmmss");
                     var backupDbFileName = $"{dbFileName}-old-version-v{checkedDatabaseVersion}-{currentFileFriendlyDateTime}{dbFileExt}";
                     var backupDbPath = $"{dbDirName}\\{backupDbFileName}";
-                    Log.Information($"SQLite database {DbFilePath} is version {checkedDatabaseVersion}. Required version {CURRENT_DATABASE_VERSION}. Renaming to {backupDbPath}");
-                    if (DbFilePath != null) File.Move(DbFilePath, backupDbPath);
+                    Log.Information($"SQLite database {_dbFilePath} is version {checkedDatabaseVersion}. Required version {CURRENT_DATABASE_VERSION}. Renaming to {backupDbPath}");
+                    if (_dbFilePath != null)
+                    {
+                        File.Move(_dbFilePath, backupDbPath);
+                    }
                     EnsureTablesExist();
                 }
             }
-            if (!File.Exists(DbFilePath))
+
+            if (File.Exists(_dbFilePath))
             {
-                Log.Information($"Creating SQLite database file {DbFilePath}");
-                SQLiteConnection.CreateFile(DbFilePath);
-                EnsureTablesExist();
+                return;
             }
+            
+            Log.Information($"Creating SQLite database file {_dbFilePath}");
+            SQLiteConnection.CreateFile(_dbFilePath);
+            EnsureTablesExist();
         }
 
         private int CheckDatabaseVersion()
@@ -64,17 +70,16 @@ namespace WinFIM.NET_Service
                 const string sql = "SELECT version FROM VERSION_CONTROL order by version desc limit 1";
                 var output = ExecuteScalar(sql, false) ?? 0;
                 checkedDatabaseVersion = Convert.ToInt32(output); // try convert to integer, or output 0
-                Log.Debug($"Database version for {DbFilePath}: {checkedDatabaseVersion}");
+                Log.Debug($"Database version for {_dbFilePath}: {checkedDatabaseVersion}");
             }
             catch
             {
-                Log.Debug($"Database version for {DbFilePath} not found. Interpreting as version {checkedDatabaseVersion}");
+                Log.Debug($"Database version for {_dbFilePath} not found. Interpreting as version {checkedDatabaseVersion}");
             }
             return checkedDatabaseVersion;
         }
 
         private void EnsureTablesExist()
-        // Ensure that all required tables exist
         {
             Log.Debug("Creating SQlite table BASELINE_PATH if it doesn't exist...");
             var sql = @"
@@ -130,7 +135,7 @@ namespace WinFIM.NET_Service
         {
             try
             {
-                using (var connection = new SQLiteConnection(ConnectionString))
+                using (var connection = new SQLiteConnection(_connectionString))
                 {
                     connection.Open();
                     using (var command = new SQLiteCommand(sql, connection))
@@ -151,7 +156,7 @@ namespace WinFIM.NET_Service
 
         internal void ExecuteReader(Action<SQLiteDataReader> action, string sql, params SQLiteParameter[] parameters)
         {
-            using (var connection = new SQLiteConnection(ConnectionString))
+            using (var connection = new SQLiteConnection(_connectionString))
             {
                 connection.Open();
                 using (var command = new SQLiteCommand(sql, connection))
@@ -176,7 +181,7 @@ namespace WinFIM.NET_Service
         internal TResult ExecuteReader<TResult>(Func<SQLiteDataReader, TResult> action, string sql, params SQLiteParameter[] parameters)
         {
             TResult result;
-            using (var connection = new SQLiteConnection(ConnectionString))
+            using (var connection = new SQLiteConnection(_connectionString))
             {
                 connection.Open();
                 using (var command = new SQLiteCommand(sql, connection))
@@ -200,13 +205,12 @@ namespace WinFIM.NET_Service
             return result;
         }
 
-        // A query that returns the first value in the first row as an object
         internal object ExecuteScalar(string sql, bool isLogError = true)
         {
             object output;
             try
             {
-                using (var connection = new SQLiteConnection(ConnectionString))
+                using (var connection = new SQLiteConnection(_connectionString))
                 {
                     connection.Open();
                     using (var command = new SQLiteCommand(sql, connection))
