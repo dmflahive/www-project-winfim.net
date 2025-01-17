@@ -148,8 +148,7 @@ namespace WinFIM.NET_Service
         private byte[] GetHashSha256(string filename)
         {
 
-            Stream stream = new FileStream(filename, FileMode.Open, FileAccess.Read,
-                        FileShare.ReadWrite);
+            Stream stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             var tempResult = _sha256.ComputeHash(stream);
             stream.Close();
             return tempResult;
@@ -330,7 +329,7 @@ namespace WinFIM.NET_Service
             return false;
         }
 
-        private string[] GetFileMonList()
+        private static string[] GetFileMonList()
         {
             //read the monitoring list (line by line)
             var monListPath = LogHelper.WorkDir + "\\monlist.txt";
@@ -388,7 +387,7 @@ namespace WinFIM.NET_Service
             return fileListArray;
         }
 
-        private string[] GetFileExcludePath()
+        private static string[] GetFileExcludePath()
         {
             //read the exclude list (line by line)
             var excludePathFilePath = LogHelper.WorkDir + "\\exclude_path.txt";
@@ -521,11 +520,9 @@ namespace WinFIM.NET_Service
                 }
                 else
                 {
-                    var errorMessage =
-                        $"File '{path}' could be renamed / deleted during the hash calculation. This file is ignored in this checking cycle - {e.Message}.";
+                    var errorMessage = $"File '{path}' could be renamed / deleted during the hash calculation. This file is ignored in this checking cycle - {e.Message}.";
                     Log.Error(errorMessage);
-                    LogHelper.WriteEventLog(errorMessage, EventLogEntryType.Error,
-                        7773); //setting the Event ID as 7773
+                    LogHelper.WriteEventLog(errorMessage, EventLogEntryType.Error, 7773); //setting the Event ID as 7773
                 }
             }
         }
@@ -570,8 +567,6 @@ namespace WinFIM.NET_Service
             var regex = ExcludeExtensionRegex();  //get the regex of file extension exclusion
             var fileOwner = GetFileOwner(path);
             Log.Verbose("File Extension Exclusion REGEX:" + regex);
-            SQLiteCommand command;
-            SQLiteDataReader dataReader;
             string message;
 
             //a. if there is file extension exclusion
@@ -612,20 +607,24 @@ namespace WinFIM.NET_Service
                         else
                         {
                             sql = "SELECT pathname, pathexists, filesize, owner, filehash, checktime FROM BASELINE_PATH WHERE pathname=@path";
-                            command = new SQLiteCommand(sql, SQLiteHelper1.Connection);
-                            command.Parameters.Add("@path", DbType.String).Value = path;
-                            dataReader = command.ExecuteReader();
-                            if (dataReader.Read())
+                            using (SQLiteCommand command = new SQLiteCommand(sql, SQLiteHelper1.Connection))
                             {
-                                message = $"File: '{path}' is modified. Previous-check: {dataReader.GetValue(5)} " +
-                                          $"Hash: (Previous){dataReader.GetValue(4)} (Current){tempHash} " +
-                                          $"Size: (Previous){dataReader.GetValue(2)}MB (Current){GetFileSize(path)}MB " +
-                                          $"File Owner: (Previous){dataReader.GetValue(3)} (Current){fileOwner}";
-                                Log.Warning(message);
-                                LogHelper.WriteEventLog(message, EventLogEntryType.Warning, 7777);
+                                command.Parameters.Add("@path", DbType.String).Value = path;
+                                using (var dataReader = command.ExecuteReader(CommandBehavior.CloseConnection))
+                                {
+                                    if (dataReader.Read())
+                                    {
+                                        message = $"File: '{path}' is modified. Previous-check: {dataReader.GetValue(5)} " +
+                                                  $"Hash: (Previous){dataReader.GetValue(4)} (Current){tempHash} " +
+                                                  $"Size: (Previous){dataReader.GetValue(2)}MB (Current){GetFileSize(path)}MB " +
+                                                  $"File Owner: (Previous){dataReader.GetValue(3)} (Current){fileOwner}";
+                                        Log.Warning(message);
+                                        LogHelper.WriteEventLog(message, EventLogEntryType.Warning, 7777);
+                                    }
+                                    dataReader.Close();
+                                }
+                                command.Dispose();
                             }
-                            dataReader.Close();
-                            command.Dispose();
                         }
                     }
                     else
@@ -700,20 +699,25 @@ namespace WinFIM.NET_Service
                             else
                             {
                                 sql = "SELECT pathname, pathexists, filesize, owner, filehash, checktime FROM BASELINE_PATH WHERE pathname=@path";
-                                command = new SQLiteCommand(sql, SQLiteHelper1.Connection);
-                                command.Parameters.Add("@path", DbType.String).Value = path;
-                                dataReader = command.ExecuteReader();
-                                if (dataReader.Read())
+                                using (var command = new SQLiteCommand(sql, SQLiteHelper1.Connection))
                                 {
-                                    message = $"File: '{path}' is modified. Previous check at:{dataReader.GetValue(5)} " +
-                                              $"Hash: (Previous){dataReader.GetValue(4)} (Current){tempHash} " +
-                                              $"Size: (Previous){dataReader.GetValue(2)}MB (Current){GetFileSize(path)}MB " +
-                                              $"File Owner: (Previous){dataReader.GetValue(3)} (Current){fileOwner}";
-                                    Log.Warning(message);
-                                    LogHelper.WriteEventLog(message, EventLogEntryType.Warning, 7777); //setting the Event ID as 7777
+                                    command.Parameters.Add("@path", DbType.String).Value = path;
+                                    using (var dataReader = command.ExecuteReader(CommandBehavior.CloseConnection))
+                                    {
+                                        if (dataReader.Read())
+                                        {
+                                            message = $"File: '{path}' is modified. Previous check at:{dataReader.GetValue(5)} " +
+                                                      $"Hash: (Previous){dataReader.GetValue(4)} (Current){tempHash} " +
+                                                      $"Size: (Previous){dataReader.GetValue(2)}MB (Current){GetFileSize(path)}MB " +
+                                                      $"File Owner: (Previous){dataReader.GetValue(3)} (Current){fileOwner}";
+                                            Log.Warning(message);
+                                            LogHelper.WriteEventLog(message, EventLogEntryType.Warning, 7777); //setting the Event ID as 7777
+                                        }
+                                        dataReader.Close();
+                                    }
+                                    command.Dispose();
                                 }
-                                dataReader.Close();
-                                command.Dispose();
+                          
                             }
                         }
                         else
@@ -817,7 +821,9 @@ namespace WinFIM.NET_Service
             var schedulerMin = LogHelper.GetSchedule();
             Log.Information($"Starting FIM checks on a {schedulerMin} minute timer");
             if (Properties.Settings.Default.is_capture_remote_connection_status)
+            {
                 Log.Information(LogHelper.GetRemoteConnections());
+            }
             var haveBaseLinePath = CheckBaseLine(); //check if there is already data in the BASELINE_PATH table from a previous FIM check
 
             var watch = new Stopwatch();
@@ -827,8 +833,7 @@ namespace WinFIM.NET_Service
             {
                 var monListFileLines = GetFileMonList(); //get the list of paths in the monlist.txt file
 
-                var pathList =
-                    GetPathList(monListFileLines, haveBaseLinePath); //get the list of files / directories to watch
+                var pathList = GetPathList(monListFileLines, haveBaseLinePath); //get the list of files / directories to watch
 
                 var excludePathLines = GetFileExcludePath(); //get the list of paths in the exclude_path.txt file
 
@@ -845,18 +850,10 @@ namespace WinFIM.NET_Service
                 ResetDatabaseTables(haveBaseLinePath);
 
                 watch.Stop();
-                var stopMessage = "Total time consumed in this round file integrity checking  = " +
-                                  watch.ElapsedMilliseconds + "ms (" +
-                                  Math.Round(Convert.ToDouble(watch.ElapsedMilliseconds) / 1000, 3)
-                                      .ToString(CultureInfo.InvariantCulture) + "s).\n" +
-                                  LogHelper.GetRemoteConnections();
+                var stopMessage = $"Total time consumed in this round of file integrity checking  = {watch.ElapsedMilliseconds}ms ({Math.Round(Convert.ToDouble(watch.ElapsedMilliseconds) / 1000, 3)}s).{Environment.NewLine}{LogHelper.GetRemoteConnections()}";
                 Log.Debug(stopMessage);
-                LogHelper.WriteEventLog(stopMessage, EventLogEntryType.Information,
-                    7771); //setting the Event ID as 7771
-                Log.Verbose("Total time consumed in this round file integrity checking  = " +
-                            watch.ElapsedMilliseconds + "ms (" +
-                            Math.Round(Convert.ToDouble(watch.ElapsedMilliseconds) / 1000, 3)
-                                .ToString(CultureInfo.InvariantCulture) + "s).");
+                LogHelper.WriteEventLog(stopMessage, EventLogEntryType.Information, 7771); //setting the Event ID as 7771
+                Log.Verbose(stopMessage);
             }
             catch (Exception e)
             {
