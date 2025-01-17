@@ -1,7 +1,6 @@
 ﻿using Serilog;
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Data.SQLite;
 using System.Diagnostics;
 using System.Globalization;
@@ -586,29 +585,21 @@ namespace WinFIM.NET_Service
                         else
                         {
                             sql = "SELECT pathname, pathexists, filesize, owner, filehash, checktime FROM BASELINE_PATH WHERE pathname=@path";
-                            using (var connection = new SQLiteConnection(_sqLiteHelper.ConnectionString))
-                            {
-                                connection.Open();
-                                using (var command = new SQLiteCommand(sql, connection))
+                            _sqLiteHelper.ExecuteReader(dataReader =>
                                 {
-                                    command.Parameters.Add("@path", DbType.String).Value = path;
-                                    using (var dataReader = command.ExecuteReader(CommandBehavior.CloseConnection))
+                                    if (!dataReader.Read())
                                     {
-                                        if (dataReader.Read())
-                                        {
-                                            message = $"File: '{path}' is modified. Previous-check: {dataReader.GetValue(5)} " +
-                                                      $"Hash: (Previous){dataReader.GetValue(4)} (Current){tempHash} " +
-                                                      $"Size: (Previous){dataReader.GetValue(2)}MB (Current){GetFileSize(path)}MB " +
-                                                      $"File Owner: (Previous){dataReader.GetValue(3)} (Current){fileOwner}";
-                                            Log.Warning(message);
-                                            LogHelper.WriteEventLog(message, EventLogEntryType.Warning, 7777);
-                                        }
-
-                                        dataReader.Close();
+                                        return;
                                     }
-                                }
-                                connection.Close();
-                            }
+                                    message = $"File: '{path}' is modified. Previous-check: {dataReader.GetValue(5)} " +
+                                              $"Hash: (Previous){dataReader.GetValue(4)} (Current){tempHash} " +
+                                              $"Size: (Previous){dataReader.GetValue(2)}MB (Current){GetFileSize(path)}MB " +
+                                              $"File Owner: (Previous){dataReader.GetValue(3)} (Current){fileOwner}";
+                                    Log.Warning(message);
+                                    LogHelper.WriteEventLog(message, EventLogEntryType.Warning, 7777);
+                                },
+                                sql,
+                                new SQLiteParameter("@path", path));
                         }
                     }
                     else
@@ -682,30 +673,21 @@ namespace WinFIM.NET_Service
                             else
                             {
                                 sql = "SELECT pathname, pathexists, filesize, owner, filehash, checktime FROM BASELINE_PATH WHERE pathname=@path";
-                                using (var connection = new SQLiteConnection(_sqLiteHelper.ConnectionString))
-                                {
-                                    connection.Open();
-                                    using (var command = new SQLiteCommand(sql, connection))
+                                _sqLiteHelper.ExecuteReader(dataReader =>
                                     {
-                                        command.Parameters.Add("@path", DbType.String).Value = path;
-                                        using (var dataReader = command.ExecuteReader(CommandBehavior.CloseConnection))
+                                        if (!dataReader.Read())
                                         {
-                                            if (dataReader.Read())
-                                            {
-                                                message = $"File: '{path}' is modified. Previous check at:{dataReader.GetValue(5)} " +
-                                                          $"Hash: (Previous){dataReader.GetValue(4)} (Current){tempHash} " +
-                                                          $"Size: (Previous){dataReader.GetValue(2)}MB (Current){GetFileSize(path)}MB " +
-                                                          $"File Owner: (Previous){dataReader.GetValue(3)} (Current){fileOwner}";
-                                                Log.Warning(message);
-                                                LogHelper.WriteEventLog(message, EventLogEntryType.Warning, 7777); //setting the Event ID as 7777
-                                            }
-
-                                            dataReader.Close();
+                                            return;
                                         }
-                                    }
-
-                                    connection.Close();
-                                }
+                                        message = $"File: '{path}' is modified. Previous check at:{dataReader.GetValue(5)} " +
+                                                  $"Hash: (Previous){dataReader.GetValue(4)} (Current){tempHash} " +
+                                                  $"Size: (Previous){dataReader.GetValue(2)}MB (Current){GetFileSize(path)}MB " +
+                                                  $"File Owner: (Previous){dataReader.GetValue(3)} (Current){fileOwner}";
+                                        Log.Warning(message);
+                                        LogHelper.WriteEventLog(message, EventLogEntryType.Warning, 7777); //setting the Event ID as 7777
+                                    }, 
+                                    sql, 
+                                    new SQLiteParameter("@path", path));
                             }
                         }
                         else
@@ -741,11 +723,7 @@ namespace WinFIM.NET_Service
             }
 
             const string sql = "SELECT BASELINE_PATH.pathname, BASELINE_PATH.pathtype FROM BASELINE_PATH LEFT JOIN CURRENT_PATH ON BASELINE_PATH.pathname = CURRENT_PATH.pathname WHERE CURRENT_PATH.pathname IS NULL";
-            using (var connection = new SQLiteConnection(_sqLiteHelper.ConnectionString))
-            {
-                connection.Open();
-                var command = new SQLiteCommand(sql, connection);
-                using (var dataReader = command.ExecuteReader(CommandBehavior.CloseConnection))
+            _sqLiteHelper.ExecuteReader(dataReader =>
                 {
                     while (dataReader.Read())
                     {
@@ -755,12 +733,8 @@ namespace WinFIM.NET_Service
                         Log.Warning(deletedMessage);
                         LogHelper.WriteEventLog(deletedMessage, EventLogEntryType.Warning, 7778); //setting the Event ID as 7778
                     }
-
-                    dataReader.Close();
-                }
-
-                connection.Close();
-            }
+                },
+                sql);
         }
 
         private void ResetDatabaseTables(bool haveBaseLinePath)

@@ -1,6 +1,8 @@
 ﻿using Serilog;
 using System;
+using System.Data;
 using System.Data.SQLite;
+using System.Diagnostics;
 using System.IO;
 
 namespace WinFIM.NET_Service
@@ -132,11 +134,9 @@ namespace WinFIM.NET_Service
                 using (var connection = new SQLiteConnection(ConnectionString))
                 {
                     connection.Open();
-                    using (var command = new SQLiteCommand(connection))
+                    using (var command = new SQLiteCommand(sql, connection))
                     {
                         Log.Verbose($"Running ExecuteNonQuery {sql}");
-                        command.CommandText = sql;
-                        command.CommandType = System.Data.CommandType.Text;
                         command.ExecuteNonQuery();
                     } 
                     connection.Close();
@@ -148,7 +148,57 @@ namespace WinFIM.NET_Service
                 Log.Error(e, errorMessage);
                 throw;
             }
+        }
 
+        internal void ExecuteReader(Action<SQLiteDataReader> action, string sql, params SQLiteParameter[] parameters)
+        {
+            using (var connection = new SQLiteConnection(ConnectionString))
+            {
+                connection.Open();
+                using (var command = new SQLiteCommand(sql, connection))
+                {
+                    if (parameters?.Length > 0)
+                    {
+                        foreach (var p in parameters)
+                        {
+                            command.Parameters.Add(p);
+                        }
+                    }
+                    using (var dataReader = command.ExecuteReader(CommandBehavior.CloseConnection))
+                    {
+                        action(dataReader);
+                        dataReader.Close();
+                    }
+                }
+                connection.Close();
+            }
+        }
+        
+        internal TResult ExecuteReader<TResult>(Func<SQLiteDataReader, TResult> action, string sql, params SQLiteParameter[] parameters)
+        {
+            TResult result;
+            using (var connection = new SQLiteConnection(ConnectionString))
+            {
+                connection.Open();
+                using (var command = new SQLiteCommand(sql, connection))
+                {
+                    if (parameters?.Length > 0)
+                    {
+                        foreach (var p in parameters)
+                        {
+                            command.Parameters.Add(p);
+                        }
+                    }
+                    
+                    using (var dataReader = command.ExecuteReader(CommandBehavior.CloseConnection))
+                    {
+                        result = action(dataReader);
+                        dataReader.Close();
+                    }
+                }
+                connection.Close();
+            }
+            return result;
         }
 
         // A query that returns the first value in the first row as an object
@@ -160,12 +210,12 @@ namespace WinFIM.NET_Service
                 using (var connection = new SQLiteConnection(ConnectionString))
                 {
                     connection.Open();
-                    using (var command = new SQLiteCommand(connection))
+                    using (var command = new SQLiteCommand(sql, connection))
                     {
                         Log.Verbose($"Running ExecuteScalar {sql}");
-                        command.CommandText = sql;
                         output = command.ExecuteScalar();
                     }
+                    connection.Close();
                 }
             }
             catch (Exception e)
@@ -178,7 +228,6 @@ namespace WinFIM.NET_Service
                 Log.Error(e, errorMessage);
                 throw;
             }
-
             return output;
         }
     }
