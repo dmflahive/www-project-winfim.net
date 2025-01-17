@@ -54,7 +54,7 @@ namespace WinFIM.NET_Service
                 string[] directoryDelimiters = { "/", "\\" };
                 if (!(directoryDelimiters.Any(logFilePath.Contains)))
                 {
-                    logFilePath = Path.Combine(LogHelper.WorkDir, logFilePath);
+                    logFilePath = Path.Combine(WorkDir, logFilePath);
                     AddOrUpdateAppSettings("serilog:write-to:File.path", logFilePath);
                 }
             }
@@ -136,7 +136,7 @@ namespace WinFIM.NET_Service
 
         internal static int GetSchedule()
         {
-            var schedulerConf = LogHelper.WorkDir + "\\scheduler.txt";
+            var schedulerConf = WorkDir + "\\scheduler.txt";
             var schedulerMin = 0;
             try
             {

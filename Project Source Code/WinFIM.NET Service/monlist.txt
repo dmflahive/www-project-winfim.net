@@ -7,3 +7,4 @@ C:\Windows\regedit.exe
 C:\windows\system.ini
 C:\windows\win.ini
 C:\Windows\System32\userinit.exe
+C:\Windows\System32

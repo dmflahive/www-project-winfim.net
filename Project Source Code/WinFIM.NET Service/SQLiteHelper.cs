@@ -5,12 +5,12 @@ using System.IO;
 
 namespace WinFIM.NET_Service
 {
-    internal sealed class SQLiteHelper : IDisposable
+    internal sealed class SQLiteHelper 
     {
-        private string ConnectionString { get; }
+        internal string ConnectionString { get; }
         private string DbFilePath { get; }
-        private const int CurrentDatabaseVersion = 3;
-        private const string CurrentDatabaseVersionNotes =
+        private const int CURRENT_DATABASE_VERSION = 3;
+        private const string CURRENT_DATABASE_VERSION_NOTES =
             "capitalised table names," +
             "renamed field fileowner to owner," +
             "renamed field filetype to pathtype," +
@@ -19,20 +19,11 @@ namespace WinFIM.NET_Service
             "removed table monlist," +
             "renamed table baseline_table to BASELINE_PATH," +
             "renamed table current_table  to CURRENT_PATH";
-        internal SQLiteConnection Connection { get; }
-
-        private bool _disposed;
 
         internal SQLiteHelper()
         {
             DbFilePath = LogHelper.WorkDir + "\\fimdb.db";
             ConnectionString = @"URI=file:" + DbFilePath + ";PRAGMA journal_mode=WAL;";
-            Connection = new SQLiteConnection(ConnectionString);
-        }
-
-        internal void Open()
-        {
-            Connection.Open();
         }
 
         internal void EnsureDatabaseExists()
@@ -41,9 +32,8 @@ namespace WinFIM.NET_Service
             if (File.Exists(DbFilePath))
             {
                 Log.Debug($"SQLite database file {DbFilePath} exists");
-                Connection.Open();
                 var checkedDatabaseVersion = CheckDatabaseVersion();
-                if (checkedDatabaseVersion != CurrentDatabaseVersion)
+                if (checkedDatabaseVersion != CURRENT_DATABASE_VERSION)
                 {
                     var dbFileName = Path.GetFileNameWithoutExtension(DbFilePath);
                     var dbFileExt = Path.GetExtension(DbFilePath);
@@ -51,10 +41,8 @@ namespace WinFIM.NET_Service
                     var currentFileFriendlyDateTime = DateTime.Now.ToString("yyyyMMdd-HHmmss");
                     var backupDbFileName = $"{dbFileName}-old-version-v{checkedDatabaseVersion}-{currentFileFriendlyDateTime}{dbFileExt}";
                     var backupDbPath = $"{dbDirName}\\{backupDbFileName}";
-                    Log.Information($"SQLite database {DbFilePath} is version {checkedDatabaseVersion}. Required version {CurrentDatabaseVersion}. Renaming to {backupDbPath}");
-                    Connection.Close();
+                    Log.Information($"SQLite database {DbFilePath} is version {checkedDatabaseVersion}. Required version {CURRENT_DATABASE_VERSION}. Renaming to {backupDbPath}");
                     if (DbFilePath != null) File.Move(DbFilePath, backupDbPath);
-                    Connection.Open();
                     EnsureTablesExist();
                 }
             }
@@ -62,7 +50,6 @@ namespace WinFIM.NET_Service
             {
                 Log.Information($"Creating SQLite database file {DbFilePath}");
                 SQLiteConnection.CreateFile(DbFilePath);
-                Connection.Open();
                 EnsureTablesExist();
             }
         }
@@ -133,7 +120,7 @@ namespace WinFIM.NET_Service
             Log.Debug("Setting database version...");
             sql = $@"
                 INSERT OR REPLACE INTO VERSION_CONTROL (version, notes) 
-                VALUES ({CurrentDatabaseVersion}, '{CurrentDatabaseVersionNotes}');
+                VALUES ({CURRENT_DATABASE_VERSION}, '{CURRENT_DATABASE_VERSION_NOTES}');
             ";
             ExecuteNonQuery(sql);
         }
@@ -142,11 +129,17 @@ namespace WinFIM.NET_Service
         {
             try
             {
-                using (var command = new SQLiteCommand(Connection))
+                using (var connection = new SQLiteConnection(ConnectionString))
                 {
-                    Log.Verbose($"Running ExecuteNonQuery {sql}");
-                    command.CommandText = sql;
-                    command.ExecuteNonQuery();
+                    connection.Open();
+                    using (var command = new SQLiteCommand(connection))
+                    {
+                        Log.Verbose($"Running ExecuteNonQuery {sql}");
+                        command.CommandText = sql;
+                        command.CommandType = System.Data.CommandType.Text;
+                        command.ExecuteNonQuery();
+                    } 
+                    connection.Close();
                 }
             }
             catch (Exception e)
@@ -164,45 +157,29 @@ namespace WinFIM.NET_Service
             object output;
             try
             {
-                using (var command = new SQLiteCommand(Connection))
+                using (var connection = new SQLiteConnection(ConnectionString))
                 {
-                    Log.Verbose($"Running ExecuteScalar {sql}");
-                    command.CommandText = sql;
-                    output = command.ExecuteScalar();
+                    connection.Open();
+                    using (var command = new SQLiteCommand(connection))
+                    {
+                        Log.Verbose($"Running ExecuteScalar {sql}");
+                        command.CommandText = sql;
+                        output = command.ExecuteScalar();
+                    }
                 }
             }
             catch (Exception e)
             {
-                if (isLogError)
+                if (!isLogError)
                 {
-                    var errorMessage = $"Error running query {sql}";
-                    Log.Error(e, errorMessage);
-                    throw;
+                    return null;
                 }
-                return null;
+                var errorMessage = $"Error running query {sql}";
+                Log.Error(e, errorMessage);
+                throw;
             }
 
             return output;
-        }
-
-        public void Dispose()
-        {
-            Dispose(disposing: true);
-        }
-
-        private void Dispose(bool disposing)
-        {
-            // Check to see if Dispose has already been called.
-            if (this._disposed) return;
-            // If disposing equals true, dispose all managed and unmanaged resources.
-            if (disposing)
-            {
-                // Dispose managed resources.
-                Connection.Close();
-                Connection.Dispose();
-            }
-            // Note disposing has been done.
-            _disposed = true;
         }
     }
 }
