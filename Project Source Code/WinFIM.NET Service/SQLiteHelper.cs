@@ -1,16 +1,18 @@
 ﻿using Serilog;
 using System;
+using System.Data;
 using System.Data.SQLite;
 using System.IO;
 
 namespace WinFIM.NET_Service
 {
-    internal sealed class SQLiteHelper : IDisposable
+    internal sealed class SQLiteHelper
     {
-        private string ConnectionString { get; }
-        private string DbFilePath { get; }
-        private const int CurrentDatabaseVersion = 3;
-        private const string CurrentDatabaseVersionNotes =
+        private readonly string _connectionString;
+        private readonly string _dbFilePath;
+        
+        private const int CURRENT_DATABASE_VERSION = 3;
+        private const string CURRENT_DATABASE_VERSION_NOTES =
             "capitalised table names," +
             "renamed field fileowner to owner," +
             "renamed field filetype to pathtype," +
@@ -19,52 +21,44 @@ namespace WinFIM.NET_Service
             "removed table monlist," +
             "renamed table baseline_table to BASELINE_PATH," +
             "renamed table current_table  to CURRENT_PATH";
-        internal SQLiteConnection Connection { get; }
-
-        private bool _disposed;
 
         internal SQLiteHelper()
         {
-            DbFilePath = LogHelper.WorkDir + "\\fimdb.db";
-            ConnectionString = @"URI=file:" + DbFilePath + ";PRAGMA journal_mode=WAL;";
-            Connection = new SQLiteConnection(ConnectionString);
-        }
-
-        internal void Open()
-        {
-            Connection.Open();
+            _dbFilePath = LogHelper.WorkDir + "\\fimdb.db";
+            _connectionString = @"URI=file:" + _dbFilePath + ";PRAGMA journal_mode=WAL;";
         }
 
         internal void EnsureDatabaseExists()
-        // Create the database if it doesn't exist or is the wrong version
         {
-            if (File.Exists(DbFilePath))
+            if (File.Exists(_dbFilePath))
             {
-                Log.Debug($"SQLite database file {DbFilePath} exists");
-                Connection.Open();
+                Log.Debug($"SQLite database file {_dbFilePath} exists");
                 var checkedDatabaseVersion = CheckDatabaseVersion();
-                if (checkedDatabaseVersion != CurrentDatabaseVersion)
+                if (checkedDatabaseVersion != CURRENT_DATABASE_VERSION)
                 {
-                    var dbFileName = Path.GetFileNameWithoutExtension(DbFilePath);
-                    var dbFileExt = Path.GetExtension(DbFilePath);
-                    var dbDirName = Path.GetDirectoryName(DbFilePath);
+                    var dbFileName = Path.GetFileNameWithoutExtension(_dbFilePath);
+                    var dbFileExt = Path.GetExtension(_dbFilePath);
+                    var dbDirName = Path.GetDirectoryName(_dbFilePath);
                     var currentFileFriendlyDateTime = DateTime.Now.ToString("yyyyMMdd-HHmmss");
                     var backupDbFileName = $"{dbFileName}-old-version-v{checkedDatabaseVersion}-{currentFileFriendlyDateTime}{dbFileExt}";
                     var backupDbPath = $"{dbDirName}\\{backupDbFileName}";
-                    Log.Information($"SQLite database {DbFilePath} is version {checkedDatabaseVersion}. Required version {CurrentDatabaseVersion}. Renaming to {backupDbPath}");
-                    Connection.Close();
-                    if (DbFilePath != null) File.Move(DbFilePath, backupDbPath);
-                    Connection.Open();
+                    Log.Information($"SQLite database {_dbFilePath} is version {checkedDatabaseVersion}. Required version {CURRENT_DATABASE_VERSION}. Renaming to {backupDbPath}");
+                    if (_dbFilePath != null)
+                    {
+                        File.Move(_dbFilePath, backupDbPath);
+                    }
                     EnsureTablesExist();
                 }
             }
-            if (!File.Exists(DbFilePath))
+
+            if (File.Exists(_dbFilePath))
             {
-                Log.Information($"Creating SQLite database file {DbFilePath}");
-                SQLiteConnection.CreateFile(DbFilePath);
-                Connection.Open();
-                EnsureTablesExist();
+                return;
             }
+            
+            Log.Information($"Creating SQLite database file {_dbFilePath}");
+            SQLiteConnection.CreateFile(_dbFilePath);
+            EnsureTablesExist();
         }
 
         private int CheckDatabaseVersion()
@@ -76,17 +70,16 @@ namespace WinFIM.NET_Service
                 const string sql = "SELECT version FROM VERSION_CONTROL order by version desc limit 1";
                 var output = ExecuteScalar(sql, false) ?? 0;
                 checkedDatabaseVersion = Convert.ToInt32(output); // try convert to integer, or output 0
-                Log.Debug($"Database version for {DbFilePath}: {checkedDatabaseVersion}");
+                Log.Debug($"Database version for {_dbFilePath}: {checkedDatabaseVersion}");
             }
             catch
             {
-                Log.Debug($"Database version for {DbFilePath} not found. Interpreting as version {checkedDatabaseVersion}");
+                Log.Debug($"Database version for {_dbFilePath} not found. Interpreting as version {checkedDatabaseVersion}");
             }
             return checkedDatabaseVersion;
         }
 
         private void EnsureTablesExist()
-        // Ensure that all required tables exist
         {
             Log.Debug("Creating SQlite table BASELINE_PATH if it doesn't exist...");
             var sql = @"
@@ -133,7 +126,7 @@ namespace WinFIM.NET_Service
             Log.Debug("Setting database version...");
             sql = $@"
                 INSERT OR REPLACE INTO VERSION_CONTROL (version, notes) 
-                VALUES ({CurrentDatabaseVersion}, '{CurrentDatabaseVersionNotes}');
+                VALUES ({CURRENT_DATABASE_VERSION}, '{CURRENT_DATABASE_VERSION_NOTES}');
             ";
             ExecuteNonQuery(sql);
         }
@@ -142,11 +135,15 @@ namespace WinFIM.NET_Service
         {
             try
             {
-                using (var command = new SQLiteCommand(Connection))
+                using (var connection = new SQLiteConnection(_connectionString))
                 {
-                    Log.Verbose($"Running ExecuteNonQuery {sql}");
-                    command.CommandText = sql;
-                    command.ExecuteNonQuery();
+                    connection.Open();
+                    using (var command = new SQLiteCommand(sql, connection))
+                    {
+                        Log.Verbose($"Running ExecuteNonQuery {sql}");
+                        command.ExecuteNonQuery();
+                    } 
+                    connection.Close();
                 }
             }
             catch (Exception e)
@@ -155,54 +152,86 @@ namespace WinFIM.NET_Service
                 Log.Error(e, errorMessage);
                 throw;
             }
-
         }
 
-        // A query that returns the first value in the first row as an object
+        internal void ExecuteReader(Action<SQLiteDataReader> action, string sql, params SQLiteParameter[] parameters)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                using (var command = new SQLiteCommand(sql, connection))
+                {
+                    if (parameters?.Length > 0)
+                    {
+                        foreach (var p in parameters)
+                        {
+                            command.Parameters.Add(p);
+                        }
+                    }
+                    using (var dataReader = command.ExecuteReader(CommandBehavior.CloseConnection))
+                    {
+                        action(dataReader);
+                        dataReader.Close();
+                    }
+                }
+                connection.Close();
+            }
+        }
+        
+        internal TResult ExecuteReader<TResult>(Func<SQLiteDataReader, TResult> action, string sql, params SQLiteParameter[] parameters)
+        {
+            TResult result;
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                connection.Open();
+                using (var command = new SQLiteCommand(sql, connection))
+                {
+                    if (parameters?.Length > 0)
+                    {
+                        foreach (var p in parameters)
+                        {
+                            command.Parameters.Add(p);
+                        }
+                    }
+                    
+                    using (var dataReader = command.ExecuteReader(CommandBehavior.CloseConnection))
+                    {
+                        result = action(dataReader);
+                        dataReader.Close();
+                    }
+                }
+                connection.Close();
+            }
+            return result;
+        }
+
         internal object ExecuteScalar(string sql, bool isLogError = true)
         {
             object output;
             try
             {
-                using (var command = new SQLiteCommand(Connection))
+                using (var connection = new SQLiteConnection(_connectionString))
                 {
-                    Log.Verbose($"Running ExecuteScalar {sql}");
-                    command.CommandText = sql;
-                    output = command.ExecuteScalar();
+                    connection.Open();
+                    using (var command = new SQLiteCommand(sql, connection))
+                    {
+                        Log.Verbose($"Running ExecuteScalar {sql}");
+                        output = command.ExecuteScalar();
+                    }
+                    connection.Close();
                 }
             }
             catch (Exception e)
             {
-                if (isLogError)
+                if (!isLogError)
                 {
-                    var errorMessage = $"Error running query {sql}";
-                    Log.Error(e, errorMessage);
-                    throw;
+                    return null;
                 }
-                return null;
+                var errorMessage = $"Error running query {sql}";
+                Log.Error(e, errorMessage);
+                throw;
             }
-
             return output;
-        }
-
-        public void Dispose()
-        {
-            Dispose(disposing: true);
-        }
-
-        private void Dispose(bool disposing)
-        {
-            // Check to see if Dispose has already been called.
-            if (this._disposed) return;
-            // If disposing equals true, dispose all managed and unmanaged resources.
-            if (disposing)
-            {
-                // Dispose managed resources.
-                Connection.Close();
-                Connection.Dispose();
-            }
-            // Note disposing has been done.
-            _disposed = true;
         }
     }
 }

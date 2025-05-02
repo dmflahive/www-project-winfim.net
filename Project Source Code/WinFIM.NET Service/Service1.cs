@@ -30,11 +30,8 @@ namespace WinFIM.NET_Service
         {
             _controller.Initialise();
             var schedulerMin = LogHelper.GetSchedule();
-            var serviceStartMessage = Properties.Settings.Default.service_start_message +
-                                      $": (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
-            serviceStartMessage = $"{serviceStartMessage + LogHelper.GetRemoteConnections()} " +
-                                  "This console started service will run every " + schedulerMin.ToString() +
-                                  " minute(s).";
+            var serviceStartMessage = $"{Properties.Settings.Default.service_start_message}: (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
+            serviceStartMessage = $"{serviceStartMessage + LogHelper.GetRemoteConnections()} This console started service will run every {schedulerMin} minute(s).";
             Log.Information(serviceStartMessage);
             LogHelper.WriteEventLog(serviceStartMessage, EventLogEntryType.Information, 7771);
 
@@ -73,10 +70,8 @@ namespace WinFIM.NET_Service
                 };
                 timer.Elapsed += OnTimer;
                 timer.Start();
-                serviceStartMessage = Properties.Settings.Default.service_start_message +
-                                      $": (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
-                serviceStartMessage = serviceStartMessage + LogHelper.GetRemoteConnections() +
-                                      $"This service will run every {schedulerMin.ToString()} minute(s).";
+                serviceStartMessage = $"{Properties.Settings.Default.service_start_message}: (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
+                serviceStartMessage = $"{serviceStartMessage}{LogHelper.GetRemoteConnections()} This service will run every {schedulerMin} minute(s).";
                 if (Properties.Settings.Default.is_capture_remote_connection_status)
                 {
                     Log.Information(serviceStartMessage);
@@ -88,10 +83,8 @@ namespace WinFIM.NET_Service
             else
             // run in continuous mode
             {
-                serviceStartMessage = Properties.Settings.Default.service_start_message +
-                                      ": (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
-                serviceStartMessage = serviceStartMessage + LogHelper.GetRemoteConnections() +
-                                      "This service will run continuously.";
+                serviceStartMessage = $"{Properties.Settings.Default.service_start_message}: (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
+                serviceStartMessage = $"{serviceStartMessage}{LogHelper.GetRemoteConnections()} This service will run continuously.";
                 Log.Information(serviceStartMessage);
                 LogHelper.WriteEventLog(serviceStartMessage, EventLogEntryType.Information, 7771);
                 while (true)
@@ -110,8 +103,7 @@ namespace WinFIM.NET_Service
 
         protected override void OnStop()
         {
-            var serviceStopMessage = Properties.Settings.Default.service_stop_message +
-                                     $": (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
+            var serviceStopMessage = $"{Properties.Settings.Default.service_stop_message}: (UTC) {DateTime.UtcNow:yyyy/MM/dd hh:mm:ss tt}";
             serviceStopMessage += LogHelper.GetRemoteConnections();
             Log.Information(serviceStopMessage);
             LogHelper.WriteEventLog(serviceStopMessage, EventLogEntryType.Information, 7770);

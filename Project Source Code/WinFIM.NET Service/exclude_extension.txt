@@ -1,9 +1,13 @@
+etl
 bak
 tmp
 log
+mdb
 mdf
 ldf
 xel
 db
+cat
+jfm
 installlog
 db-journal
